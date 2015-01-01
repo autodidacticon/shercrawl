@@ -1,0 +1,11 @@
+{
+  "name": "shercrawl",
+  "version": "0.0.0",
+  "description": "crawl sherdog.com",
+  "main": "crawl.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "BSD"
+}
