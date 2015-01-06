@@ -2,10 +2,15 @@
   "name": "shercrawl",
   "version": "0.0.0",
   "description": "crawl sherdog.com",
-  "main": "crawl.js",
+  "main": "shercrawl.js",
   "scripts": {
     "test": "mocha"
   },
-  "author": "",
-  "license": "BSD"
+  "author": "Richard Moorhead",
+  "license": "BSD",
+  "dependencies": {
+    "jsdom": "*",
+    "underscore": "*",
+    "mongoose": "*"
+  }
 }
