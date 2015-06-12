@@ -1,12 +1,14 @@
 jsdom = require "jsdom"
 _ = require "underscore"
 s = require('./shermodel').Shermodel()
+q = require "q"
 event_urls = {}
 fighter_urls = {}
 
 shercrawl = shercrawl || {}
 
 shercrawl.jsdominator = (url,fn,scripts) ->
+
   require('jsdom').env
     url: url,
     scripts: ["http://code.jquery.com/jquery.js"],
@@ -40,7 +42,7 @@ shercrawl.parse_fighter_data_from = (fighter_url, force = true) ->
       $ = w.$
       fighter =
         fighterId: fighter_url,
-        n: $('.fn').text(),
+        name: $('.fn').text(),
         dob: new Date($('span[itemprop="birthDate"]').text()),
         ht: $('span.item.height').text().match(/\d+\.?\d*(?=\scm)/g),
         wt: $('span.item.weight').text().match(/\d+\.?\d*(?=\skg)/g),
