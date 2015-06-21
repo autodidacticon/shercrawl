@@ -44,7 +44,7 @@ fightSchema = mongoose.Schema
     fId: String,
     d: Date
 
-exports.Shermodel = (connection = connect()) ->
+module.exports = ((connection = connect()) ->
   fighter: connection.model('fighter', fighterSchema)
 
   fight: connection.model('fight', fightSchema)
@@ -52,4 +52,4 @@ exports.Shermodel = (connection = connect()) ->
   event: connection.model('event', eventSchema)
 
   disconnect: ->
-    connection.disconnect()
+    connection.disconnect())()

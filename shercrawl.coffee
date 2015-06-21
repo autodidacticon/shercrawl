@@ -1,108 +1,92 @@
-jsdom = require "jsdom"
-_ = require "underscore"
-s = require('./shermodel').Shermodel()
-q = require "q"
-event_urls = {}
-fighter_urls = {}
+Cheerio = require 'cheerio'
+Promise = require 'bluebird'
+Request = Promise.promisifyAll(require 'request')
+_ = require 'underscore'
 
-shercrawl = shercrawl || {}
+class Shercrawl
+  sherdog: 'http://www.sherdog.com'
+  shermodel: require('./shermodel')
+  fighter_urls: {}
+  load_html: (url) =>
+    Request.getAsync(url)
+    .spread((err, res) ->
+      c = Cheerio.load res
+      c.url = url
+      c)
 
-shercrawl.jsdominator = (url,fn,scripts) ->
+  get_events: ($) =>
+    event_urls = []
+    $('table.event a[href]').each ((i,e) ->
+      event_urls.push @load_html @sherdog + e.attribs.href
+      return).bind(@)
+    event_urls
+  
+  get_fighters: ($) =>
+    $('a[href ^= "/fighter"]').each ((i,e) ->
+      url = @sherdog + e.attribs.href
+      if not _.has @fighter_urls, url
+        @fighter_urls[url] = @load_html(url).then(@parse_fighter_data)
+      return).bind(@)
 
-  require('jsdom').env
-    url: url,
-    scripts: ["http://code.jquery.com/jquery.js"],
-    done: (e,w) ->
-      if e
-        console.log e
-        return
-      fn e,w
-      w.close()
-  return
-
-shercrawl.get_fighters_from = (event_urls) ->
-  for event in _.keys(event_urls)
-    shercrawl.jsdominator event,
-      (e,w) ->
-        $ = w.$
-        $('a[href ^= "/fighter"]').each (i,e) ->
-          if not _.has fighter_urls, e.href
-            fighter_urls[e.href] = false
-            shercrawl.parse_fighter_data_from e.href
-        event_urls[event] = true
-        return
-  return
-
-shercrawl.parse_fighter_data_from = (fighter_url, force = true) ->
-  if not force and not s.fighter.findOne(fighterId: fighter_url)
-    #fighter exists
-    return
-  shercrawl.jsdominator fighter_url,
-    (e,w) ->
-      $ = w.$
+  parse_fighter_data: ($) =>
+    try
       fighter =
-        fighterId: fighter_url,
+        fighterId: $.url
         name: $('.fn').text(),
         dob: new Date($('span[itemprop="birthDate"]').text()),
-        ht: $('span.item.height').text().match(/\d+\.?\d*(?=\scm)/g),
-        wt: $('span.item.weight').text().match(/\d+\.?\d*(?=\skg)/g),
+        ht: Number( $('span.item.height').text().match(/\d+\.?\d*(?=\scm)/g) ),
+        wt: Number( $('span.item.weight').text().match(/\d+\.?\d*(?=\skg)/g) ),
         from: $('span.locality').text(),
         cls: $('strong.title').text(),
         w: Number($('span.result:contains("Wins")').next().text()),
-        wko: $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sKO\/TKO)/g),
-        ws: $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sSUBMISSIONS)/g),
-        wd: $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g),
-        wo: $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g),
+        wko: Number( $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sKO\/TKO)/g) ),
+        ws: Number( $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sSUBMISSIONS)/g) ),
+        wd: Number( $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g) ),
+        wo: Number( $('span.result:contains("Wins")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g) ),
         l: Number($('span.result:contains("Losses")').next().text()),
-        lko: $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sKO\/TKO)/g),
-        ls: $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sSUBMISSIONS)/g),
-        ld: $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g),
-        lo: $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g),
-      for key in _.keys fighter
-        if typeof fighter[key] == 'object' and fighter[key] != null and fighter[key].hasOwnProperty 'length'
-          fighter[key] = Number fighter[key][0]
+        lko: Number($('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sKO\/TKO)/g)),
+        ls: Number( $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sSUBMISSIONS)/g) ),
+        ld: Number( $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g) ),
+        lo: Number( $('span.result:contains("Losses")').closest('.bio_graph').find('span.graph_tag').text().match(/\d+(?=\sDECISIONS)/g) )
          
-      console.log s.fighter.findOneAndUpdate( fighterId: fighter_url, fighter, upsert: true ).exec()
-      delete fighter_urls[fighter_url]
+      @shermodel.fighter.findOneAndUpdate( name: fighter.name, fighter, upsert: true ).exec()
       
-      $('.fight_history').find('tr.odd,tr.even').each (i,e) ->
-        data = e.children
+      $('.fight_history').find('tr.odd,tr.even').each ((i,e) ->
+        data = $(e).children()
         fight =
-          e: data[2].firstChild.href,
-          d: new Date(data[2].lastChild.textContent)
-          ref: data[3].lastChild.textContent
-          m: data[3].firstChild.textContent
-          r: Number data[4].firstChild.textContent
+          e: @sherdog + data[2]?.firstChild.attribs.href,
+          d: new Date $(data[2]?.lastChild).text()
+          ref: $(data[3]?.lastChild).text()
+          m: $(data[3]?.firstChild).text()
+          r: Number $(data[4]?.firstChild).text()
 
-        if data[0].firstChild.textContent.trim().toUpperCase() == 'WIN'
-          fight.w = fighter_url
-          fight.l = data[1].firstChild.href
+        if $(data[0]?.firstChild).text().trim().toUpperCase() == 'WIN'
+          fight.w = $.url
+          fight.l = @sherdog + data[1]?.firstChild.attribs.href
         else
-          fight.l = fighter_url
-          fight.w = data[1].firstChild.href
+          fight.l = $.url
+          fight.w = @sherdog + data[1]?.firstChild.attribs.href
           
-        t = data[5].firstChild.textContent.split ':'
-        t = t[0] * 60 + t[1]
+        t = $(data[5]?.firstChild).text().split ':'
+        t = Number t[0] * 60 + Number t[1]
         fight.t = t
-
         fight.fId = fight.e + '|' + fight.w + '|' + fight.l
-        console.log s.fight.findOneAndUpdate( fId: fight.fId, fight, upsert: true ).exec()
-        return
-      return
+        @shermodel.fight.findOneAndUpdate( fId: fight.fId, fight, upsert: true ).exec()
+        return).bind @
+    catch e
+      print e
+      print $.url
+    return
 
-exports.shercrawl = shercrawl
-
-exports.run = ->
-  shercrawl.jsdominator "http://www.sherdog.com/organizations/Ultimate-Fighting-Championship-2",
-    (e,w) ->
-      $ = w.$
-      $('table.event a[href]').each (i,e) ->
-        event_urls[e.href] = false
-        return
-      shercrawl.get_fighters_from event_urls
-      return
+  run: =>
+    url = @sherdog + "/organizations/Ultimate-Fighting-Championship-2"
+    @load_html(url)
+    .then(@get_events)
+    .each(@get_fighters)
 
 
+module.exports = new Shercrawl()
 
 if require.main == module
-  this.run()
+  s = new Shercrawl()
+  s.run()

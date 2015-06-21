@@ -1,3 +1,2 @@
-s = require './shercrawl.coffee'
-
-s.shercrawl.parse_fighter_data_from 'http://www.sherdog.com/fighter/Chris-Weidman-42804'
+Shercrawl = require './shercrawl'
+Shercrawl.load_html('http://www.sherdog.com/fighter/Chris-Weidman-42804').then(Shercrawl.parse_fighter_data).done(process.exit)
